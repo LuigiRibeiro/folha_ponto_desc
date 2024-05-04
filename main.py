@@ -3,15 +3,37 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.platypus import Table, TableStyle, Image
 from calendar import monthrange, weekday
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import Paragraph
+import PyPDF2
+import io
+from reportlab.lib.pagesizes import letter
+from PyPDF2 import PdfReader, PdfWriter
+from datetime import datetime
 
 
-def criar_pdf_controle_ponto(mes, ano, feriados, facultativos):
+def criar_pdf_controle_ponto(nome_mes, mes, ano, feriados, facultativos):
     # Configurações do PDF
     nome_arquivo = f"controle_ponto_{mes}_{ano}.pdf"
     pdf = canvas.Canvas(nome_arquivo, pagesize=A4)
     largura_pagina, altura_pagina = A4
 
+
+    # Adicionar imagem no topo da página
+    pdf.drawImage("cabeçalho.png", 27, 560, width=540, height=260)
+
     # Cabeçalho
+    estilo = getSampleStyleSheet()["Normal"]
+    estilo.fontName = "Times-Roman"
+    estilo.fontSize = 16
+    estilo.leading = 14
+
+    # Texto com estilo
+    texto = f"Mês de {nome_mes} / {ano}"
+    paragrafo = Paragraph(texto, estilo)
+    paragrafo.wrapOn(pdf, 400, 100)
+    paragrafo.drawOn(pdf, largura_pagina / 2 - len(nome_mes) * 4 - 55, altura_pagina - 100)
+
     pdf.drawString(30, 30, f"*De acordo com a CI UERJ/GR Nº 246 /2023.")
 
     # Tabela de dias do mês
@@ -241,11 +263,65 @@ def criar_pdf_controle_ponto(mes, ano, feriados, facultativos):
 
     print(f"PDF gerado com sucesso: {nome_arquivo}")
 
+
+def juntar_pdf(mes, ano):
+    # Abrir o PDF existente
+    pdf_existente = PyPDF2.PdfReader(open(f"controle_ponto_{mes}_{ano}.pdf", "rb"))
+
+    # Abrir o PDF com a imagem
+    pdf_imagem = PyPDF2.PdfReader(open("FOLHA FREQ_VERSO ASSINADA.pdf", "rb"))
+
+    # Criar um novo PDF
+    pdf_novo = PyPDF2.PdfWriter()
+
+    # Adicionar páginas do PDF existente ao novo PDF
+    for pagina_num in range(len(pdf_existente.pages)):
+        pagina = pdf_existente.pages[pagina_num]
+        pdf_novo.add_page(pagina)
+
+    # Adicionar páginas do PDF com a imagem ao novo PDF (assumindo que a imagem está na primeira página)
+    pagina_imagem = pdf_imagem.pages[0]
+    pdf_novo.add_page(pagina_imagem)
+
+    # Salvar o novo PDF
+    with open(f"FOLHA FREQ {mes}_{ano} - LUIGI.pdf", "wb") as f:
+        pdf_novo.write(f)
+
+
+def ajustar_verso():
+    packet = io.BytesIO()
+    can = canvas.Canvas(packet, pagesize=A4)
+    data_atual = datetime.now().strftime("%d   %m   %Y")
+    can.drawString(66, 86, data_atual)
+    can.drawImage("assinatura_com_fundo.png", 40, 95, width=88, height=40)
+    can.save()
+
+    # move to the beginning of the StringIO buffer
+    packet.seek(0)
+
+    # create a new PDF with Reportlab
+    new_pdf = PdfReader(packet)
+    # read your existing PDF
+    existing_pdf = PdfReader(open("FOLHA FREQ_VERSO.pdf", "rb"))
+    output = PdfWriter()
+    # add the "watermark" (which is the new pdf) on the existing page
+    page = existing_pdf.pages[0]
+    page.merge_page(new_pdf.pages[0])
+    output.add_page(page)
+    # finally, write "output" to a real file
+    output_stream = open("FOLHA FREQ_VERSO ASSINADA.pdf", "wb")
+    output.write(output_stream)
+    output_stream.close()
+
+
 if __name__ == '__main__':
     # Exemplo de uso
-    mes = 5
+    mes = 4
+    nomes_mes = 'ABRIL'
     ano = 2024
-    feriados = [27]
-    falcultativos = [28]
-    criar_pdf_controle_ponto(mes, ano, feriados, falcultativos)
+    feriados = [23]
+    falcultativos = [22]
+    criar_pdf_controle_ponto(nomes_mes, mes, ano, feriados, falcultativos)
+    ajustar_verso()
+    juntar_pdf(mes, ano)
 
